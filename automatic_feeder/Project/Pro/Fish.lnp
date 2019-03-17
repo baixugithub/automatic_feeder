@@ -1,0 +1,5 @@
+".\main.obj",
+".\lcd.obj",
+"STARTUP.obj" 
+TO "Fish" 
+RAMSIZE(256) 

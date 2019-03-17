@@ -1,0 +1,238 @@
+C51 COMPILER V9.01   MAIN                                                                  05/29/2015 02:06:14 PAGE 1   
+
+
+C51 COMPILER V9.01, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\main.obj
+COMPILER INVOKED BY: D:\KEIL\KEIL_Pro\keil安装\C51\BIN\C51.EXE ..\..\user\src\main.c BROWSE INCDIR(..\..\Hardware\inc) D
+                    -EBUG OBJECTEXTEND PRINT(.\main.lst) OBJECT(.\main.obj)
+
+line level    source
+
+   1          #include <reg51.h>
+   2          #include <intrins.h>                    //" _nop_(); "要用到此头文件
+   3          #include "LCD.h"
+   4          
+   5          #define uint unsigned int
+   6          #define uchar unsigned char
+   7          
+   8          sbit servo = P3^7;                              //舵机控制端口
+   9          sbit time_up = P3^0;                    //按键控制定时时间增
+  10          sbit time_down = P3^1;                  //按键控制定时时间减
+  11          sbit hand_control = P3^3;               //按键控制舵机转动
+  12          
+  13          uchar code time_show[]="TIMER_TIME=";             //1602显示数据
+  14          
+  15          uchar  period,rate;                      //     period：输出脉宽的周期,rate:舵机输出角度位置
+  16          uint t0,jishu;                           //t0：定时器 T1 计时变量，jishu:控制舵机转动角度变量
+  17          uint time=1;                             //定时时间
+  18          bit runservo_flag=0;             //让舵机开始转的标志位
+  19          uint max_rate=15;                        //改变舵机输出位置变量
+  20          /*
+  21          max_rate=5——0度;
+  22          max_rate=10——45度;
+  23          max_rate=15——90度;
+  24          max_rate=20——135度;
+  25          max_rate=22——180度；
+  26          */
+  27          ////////////////////////////
+  28          void delayms(uint z);           //延时z毫秒
+  29          void handcontrol_servo();               //按键控制舵机转动
+  30          void set_time();
+  31          void timer_init();                              //定时器初始化
+  32          
+  33          void main()
+  34          {       
+  35   1              uint i,shi,ge;  
+  36   1              
+  37   1              timer_init();
+  38   1              LcdInit();
+  39   1              rate = max_rate;                 //设置舵机初始位置
+  40   1              delayms(600);
+  41   1      
+  42   1              while(1)
+  43   1              {
+  44   2                       handcontrol_servo();    //手动控制喂鱼
+  45   2                       set_time();                     //定时时间设置 
+  46   2      
+  47   2      //--------------------------------舵机正反转-----------------------------//     
+  48   2                                              
+  49   2                      if(jishu==1)                     //一秒钟jishu增一次，来改变舵机输出角度位置，实现舵机正反转
+  50   2                      {
+  51   3                              max_rate=5;                      //舵机输出角度位置：  0  度
+  52   3                      }
+  53   2                      if(jishu==2)                      
+  54   2                      {
+C51 COMPILER V9.01   MAIN                                                                  05/29/2015 02:06:14 PAGE 2   
+
+  55   3                              max_rate=25;             //舵机输出角度位置：   180 度
+  56   3                      }       
+  57   2                      TR0=1;                                  //开定时器T0
+  58   2                      rate=max_rate;                  //转动舵机
+  59   2                      delayms(600);                   //延时（控制转动快慢）
+  60   2      
+  61   2      //---------------------------1602显示定时时间--------------------------//                                  
+  62   2                      
+  63   2                      shi = time/10;
+  64   2                      ge = time%10;
+  65   2      
+  66   2                      LcdWriteCom(0x80);                       //1602显示     "TIMER_TIME=xx min"
+  67   2                      for(i=0;i<11;i++)
+  68   2                              LcdWriteData(time_show[i]);
+  69   2                      LcdWriteCom(0x8b);
+  70   2                      LcdWriteData(0x30+shi);
+  71   2                      LcdWriteCom(0x8c);
+  72   2                      LcdWriteData(0x30+ge);
+  73   2      
+  74   2                      LcdWriteCom(0x8d);
+  75   2                      LcdWriteData('m');
+  76   2                      LcdWriteCom(0x8e);
+  77   2                      LcdWriteData('i');
+  78   2                      LcdWriteCom(0x8f);
+  79   2                      LcdWriteData('n');
+  80   2      
+  81   2      
+  82   2                      TR0=0;                                                  //关定时器 T0，结合 "while(!runservo_flag){}；" 使舵机停止转动
+  83   2                      servo=0;                                                //数据口拉低
+  84   2      
+  85   2                      while(!runservo_flag)                   //若runservo标志为0 ，使舵机不转动
+  86   2                      {
+  87   3                              handcontrol_servo();            //手动控制喂鱼            
+  88   3                              set_time();                                     //定时时间设置           //这两句再写一遍是使舵机不转时，也能检测按键是否按下或1602显示
+  89   3                                                                                                                                                      
+  90   3                              shi = time/10;
+  91   3                              ge = time%10;
+  92   3              
+  93   3                              LcdWriteCom(0x80);                       //1602显示     "TIMER_TIME=xx min"
+  94   3                              for(i=0;i<11;i++)
+  95   3                                      LcdWriteData(time_show[i]);
+  96   3                              LcdWriteCom(0x8b);
+  97   3                              LcdWriteData(0x30+shi);
+  98   3                              LcdWriteCom(0x8c);
+  99   3                              LcdWriteData(0x30+ge);
+ 100   3              
+ 101   3                              LcdWriteCom(0x8d);
+ 102   3                              LcdWriteData('m');
+ 103   3                              LcdWriteCom(0x8e);
+ 104   3                              LcdWriteData('i');
+ 105   3                              LcdWriteCom(0x8f);
+ 106   3                              LcdWriteData('n');
+ 107   3      
+ 108   3                      }
+ 109   2                      runservo_flag=0;                                //为下次舵机转动做准备
+ 110   2              }//while(1)     
+ 111   1      }
+ 112          //
+ 113          void delayms(uint z)            //延时z毫秒
+ 114          {        uint x,y;
+ 115   1         for(x=1;x<118;x++)
+ 116   1         for(y=1;y<z;y++);
+C51 COMPILER V9.01   MAIN                                                                  05/29/2015 02:06:14 PAGE 3   
+
+ 117   1      }
+ 118          
+ 119          void handcontrol_servo()                //按键控制舵机转动
+ 120          {
+ 121   1              if(hand_control==0)                     //判断是否按下
+ 122   1              {               
+ 123   2                      delayms(30);                    //延时10ms,去掉抖动部分
+ 124   2                      if(hand_control==0)             //确认已经按下
+ 125   2                      {
+ 126   3                               runservo_flag = 1;                             //servo标志置1 ，舵机开始转动
+ 127   3                      }
+ 128   2                      while (!hand_control);          //等待松手      
+ 129   2              }
+ 130   1      }
+ 131          
+ 132          void set_time()
+ 133          {
+ 134   1      
+ 135   1              if(time_up==0)                          //判断是否按下
+ 136   1              {               
+ 137   2                      delayms(10);                    //延时10ms,去掉抖动部分
+ 138   2                      if(time_up==0)                  //确认已经按下
+ 139   2                              {
+ 140   3                                      time++;                 //定时时间增
+ 141   3                              }
+ 142   2                      while(!time_up);                //等待松手      
+ 143   2              }
+ 144   1      
+ 145   1              if(time_down==0)                        //判断是否按下
+ 146   1              {               
+ 147   2                      delayms(10);                    //延时10ms,去掉抖动部分
+ 148   2                      if(time_down==0)                //确认已经按下
+ 149   2                              {
+ 150   3                                      time--;                 //定时时间减
+ 151   3                              }
+ 152   2                      while(!time_down);              //等待松手
+ 153   2              }
+ 154   1      
+ 155   1              if(time<0) time=0;
+ 156   1      }
+ 157          void timer_init()                               //定时器初始化
+ 158          {
+ 159   1              TMOD = 0x11;                            //定时器 T0 ，T1 都设为工作方式 1
+ 160   1      
+ 161   1              TH0=(65535-100)/256;        //定时器 T0 ，T1 装初值   
+ 162   1              TL0=(65535-100)%256;            //100表示100us
+ 163   1      
+ 164   1              TH1=(65536-50000)/256;          //50000表示50ms
+ 165   1              TL1=(65536-50000)%256;
+ 166   1      
+ 167   1              EA = 1;                            //开总中断
+ 168   1              ET0 = 1;                           //开定时器T0中断
+ 169   1              ET1 = 1;                           //开定时器T1中断
+ 170   1              TR1 = 1;                           //开定时器T1
+ 171   1      }
+ 172          
+ 173          
+ 174          void maikuan() interrupt 1                              //用定时器 T0 输出脉宽来控制舵机
+ 175          { 
+ 176   1              TH0=(65535-100)/256;                            //重装初值             
+ 177   1              TL0=(65535-100)%256;                                                                   
+ 178   1              period++; 
+C51 COMPILER V9.01   MAIN                                                                  05/29/2015 02:06:14 PAGE 4   
+
+ 179   1              if(period>200)  period=0;                       //设置脉宽周期为20MS
+ 180   1              if(period<rate)  servo=1;                       //输出一定时间的占空比脉宽
+ 181   1              else  servo=0;
+ 182   1      }
+ 183          
+ 184          void timer() interrupt 3                                //用定时器 T1 计时               
+ 185          {  
+ 186   1              uint j,sec;
+ 187   1              TH1=(65536-50000)/256;   
+ 188   1              TL1=(65536-50000)%256;  
+ 189   1              t0++;   
+ 190   1              if(t0==20)                                                              //1s 进一次中断
+ 191   1                      {
+ 192   2                              t0 = 0;                                                                 
+ 193   2                              jishu++;
+ 194   2                              j++;                    
+ 195   2                              if(j>=60*time)                                  //（60*time）s 既 time 分钟定时时间到
+ 196   2                              {                                                               
+ 197   3                                      runservo_flag = 1;                      //runservo标志置1 ，使舵机开始转动
+ 198   3                                      sec++;                                          //秒计时来控制舵机转动时转动次数
+ 199   3                                      if(sec > 10)                            //转动10s
+ 200   3                                      {
+ 201   4                                              runservo_flag = 0;              //标志清零
+ 202   4                                              sec = 0;                                //秒计时变量清零
+ 203   4                                              j = 0;                                  //计时变量清零
+ 204   4                                      }                                               
+ 205   3                              }
+ 206   2                              if(jishu==3) jishu=0;                   //选择舵机输出角度位置                                          
+ 207   2                      } 
+ 208   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    642    ----
+   CONSTANT SIZE    =     12    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     10      10
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
